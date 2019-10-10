@@ -7,10 +7,11 @@ class nmea0183:
         # checksum is not required
         if (len(checksum_parts) == 2):
             self.checksum = checksum_parts[1]
-            self.checksum_okay = self.valid_checksum()
+            self.checksum_okay = self.validate_checksum()
             if (self.checksum_okay == False):
                 # Stop if checksum fails
-                return 0
+                #return 0
+                pass
         else:
             self.checkum = None
             self.checksum_okay = None
@@ -19,12 +20,21 @@ class nmea0183:
         label = self.fields[0]
         if (label[:1] != '$'):
             # Probably not a complete sentence
-            return 0
+            #return 0
+            pass
 
         self.talker = label[1:3]
         self.talker_description = self._NMEA_TALKERS[self.talker]
         self.message_type = label[3:]
         self.message_type_description = self._NMEA_MESSAGES__[self.message_type]
+
+        if (self.message_type == 'GGA'):
+            self.__class__ = gga
+            self.parse_fields()
+        elif (self.message_type == 'ZDA'):
+            self.__class__ = zda
+            self.parse_fields()
+
 
     def latdm2dd(self, latdm, hemi):
         degrees = float(latdm[:2])
@@ -49,28 +59,45 @@ class nmea0183:
 
     def altitude2meters(self, altitude, units):
         if (units == 'M'):
-            alt = float(altitude)
+            try:
+                alt = float(altitude)
+            except ValueError:
+                alt = None
         else:
-            alt = float(0)
+            alt = None
 
         return alt
 
 
-    def valid_checksum(self):
+    def validate_checksum(self):
 
         csum = 0
         for elem in self.data.lstrip('$'):
             csum ^= ord(elem)
 
 
-        computed_checksum = format(csum, 'X')
+        self.computed_checksum = self.compute_nmea_checksum(self.data)
 
-        if (computed_checksum == self.checksum):
+        if (self.computed_checksum == self.checksum):
             result = True
         else:
             result = False
 
         return result
+
+    def compute_nmea_checksum(self, string):
+
+        csum = 0
+        for elem in string.lstrip('$'):
+            csum ^= ord(elem)
+
+        computed_checksum = format(csum, 'X')
+
+        return computed_checksum
+
+
+    def nmeastring2float(string):
+        return False
 
 
     # Shamelessly taken from https://fishandwhistle.net/post/2016/using-pyserial-pynmea2-and-raspberry-pi-to-log-nmea-output/
@@ -122,7 +149,7 @@ class nmea0183:
                      'ZA': 'Atomic Clock Timekeeper',
                      'ZC': 'Chronometer Timekeeper',
                      'ZQ': 'Quartz Clock Timekeeper',
-                     'ZV': 'Radio Update Timekeeper'
+                     'ZV': 'Radio Update Timekeeper',
     }
     
     _NMEA_MESSAGES__ = {'GNS': 'Fix data',
@@ -191,7 +218,8 @@ class nmea0183:
                         'DBS': 'Depth Below Surface',
                         'APA': 'Autopilot Sentence "A"',
                         'DBT': 'Depth below transducer',
-                        'ZFO': 'UTC & Time from origin Waypoint'
+                        'ZFO': 'UTC & Time from origin Waypoint',
+                        'ZDA': '',
     }
 
 
@@ -200,6 +228,9 @@ class gga(nmea0183):
     def __init__(self, sentence):
 
         super().__init__(sentence)
+        self.parse_fields
+
+    def parse_fields(self):
         self.time = float(self.fields[1])
         self.lat = self.latdm2dd(self.fields[2], self.fields[3])
         self.lon = self.londm2dd(self.fields[4], self.fields[5])
@@ -208,14 +239,21 @@ class gga(nmea0183):
         self.hdop = float(self.fields[8])
         self.altitude_above_mean_sea_level = self.altitude2meters(self.fields[9], self.fields[10])
         self.altitude_above_mean_geoid = self.altitude2meters(self.fields[11], self.fields[12])
-        self.seconds_since_gdps_update = float(self.fields[13])
-        self.gdps_station_id = int(self.fields[14])
+        try:
+            self.seconds_since_dgps_update = float(self.fields[13])
+        except ValueError:
+            self.seconds_since_dgps_update = None
+
+        try:
+            self.dgps_station_id = int(self.fields[14])
+        except ValueError:
+            self.dgps_station_id = None
 
 
 
-    def print_help():
+    def print_help(self):
 
-        example = """
+        example = """ 
 gga_string = '$GPGGA,172814.0,3723.46587704,N,12202.26957864,W,2,6,1.2,18.893,M,-25.669,M,2.0,0031*4F'
 
 $GPGGA,hhmmss.ss,ddmm.mmmm,n,dddmm.mmmm,e,q,ss,y.y,a.a,z,g.g,z,t.t,iiii*CC
@@ -242,22 +280,49 @@ $GPGGA,hhmmss.ss,ddmm.mmmm,n,dddmm.mmmm,e,q,ss,y.y,a.a,z,g.g,z,t.t,iiii*CC
     46.9,M        Height of geoid (mean sea level) above WGS84 ellipsoid [meters]
     (empty field) Time in seconds since last DGPS update
     (empty field) DGPS station ID number
-    *47           Checksum, always begins with *	
+    *47           Checksum, always begins with *    
 
 """
 
         print(example)
 
 
+class zda(nmea0183):
+
+    def __init__(self, sentence):
+
+        super().__init__(sentence)
+        self.parse_fields
+
+    def parse_fields(self):
+        self.time = float(self.fields[1])
+        self.day = int(self.fields[2])
+        self.month = int(self.fields[3])
+        self.year = int(self.fields[4])
+        self.timezone_offset_hours = int(self.fields[5])
+        self.timezone_offset_minutes = int(self.fields[6])
 
 
-if __name__ == "__main__":
-    
-    gga_string = '$GPGGA,172814.0,3723.46587704,N,12202.26957864,W,2,6,1.2,18.893,M,-25.669,M,2.0,0031*4F'
+    def print_help(self):
 
-    #gga.print_help()
-    gga_obj = gga(gga_string)
-    print(gga_obj.message_type_description)
-    print(gga_obj.lat)
-    print(dir(gga_obj))
+        example = """ 
+ZDA - Date and Time
 
+Example Record: $GPZDA,201530.18,04,07,2002,01,00*60
+
+where:
+     201530.18  hours, minutes, and seconds expressed as hhmmss.ss
+                 20       2-digit hour [24 hour clock]
+                 15       2-digit minute 
+                 30.18    decimal seconds
+     04         2-digit day, 
+     07         2-digit month
+     2002       4-digit year
+     01         2-digit local timezone hours: -13 to 13
+     00         2-digit local timezone minutes: 0 to 59
+     *60        Checksum, begins with *
+"""
+
+        print(example)
+
+# vim: set ts=4 sw=4 tw=0 et :
