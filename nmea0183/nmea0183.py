@@ -4,14 +4,15 @@ class nmea0183:
 
         checksum_parts = sentence.split('*')
         self.data = checksum_parts[0]
+        self.computed_checksum = compute_nmea_checksum(self.data)
         # checksum is not required
         if (len(checksum_parts) == 2):
             self.checksum = checksum_parts[1]
-            self.checksum_okay = self.validate_checksum()
-            if (self.checksum_okay == False):
-                # Stop if checksum fails
-                #return 0
-                pass
+            if (self.computed_checksum == self.checksum):
+                self.checksum_okay = True
+            else:
+                self.checksum_okay = False
+
         else:
             self.checkum = None
             self.checksum_okay = None
@@ -20,7 +21,6 @@ class nmea0183:
         label = self.fields[0]
         if (label[:1] != '$'):
             # Probably not a complete sentence
-            #return 0
             pass
 
         self.talker = label[1:3]
@@ -34,70 +34,6 @@ class nmea0183:
         elif (self.message_type == 'ZDA'):
             self.__class__ = zda
             self.parse_fields()
-
-
-    def latdm2dd(self, latdm, hemi):
-        degrees = float(latdm[:2])
-        minutes = float(latdm[3:])
-        dd = degrees + (minutes/60)
-
-        if (hemi == 'S'):
-            dd = -1 * dd
-
-        return dd
-
-
-    def londm2dd(self, londm, hemi):
-        degrees = float(londm[:3])
-        minutes = float(londm[4:])
-        dd = degrees + (minutes/60)
-
-        if (hemi == 'W'):
-            dd = -1 * dd
-
-        return dd
-
-    def altitude2meters(self, altitude, units):
-        if (units == 'M'):
-            try:
-                alt = float(altitude)
-            except ValueError:
-                alt = None
-        else:
-            alt = None
-
-        return alt
-
-
-    def validate_checksum(self):
-
-        csum = 0
-        for elem in self.data.lstrip('$'):
-            csum ^= ord(elem)
-
-
-        self.computed_checksum = self.compute_nmea_checksum(self.data)
-
-        if (self.computed_checksum == self.checksum):
-            result = True
-        else:
-            result = False
-
-        return result
-
-    def compute_nmea_checksum(self, string):
-
-        csum = 0
-        for elem in string.lstrip('$'):
-            csum ^= ord(elem)
-
-        computed_checksum = format(csum, 'X')
-
-        return computed_checksum
-
-
-    def nmeastring2float(string):
-        return False
 
 
     # Shamelessly taken from https://fishandwhistle.net/post/2016/using-pyserial-pynmea2-and-raspberry-pi-to-log-nmea-output/
@@ -232,13 +168,13 @@ class gga(nmea0183):
 
     def parse_fields(self):
         self.time = float(self.fields[1])
-        self.lat = self.latdm2dd(self.fields[2], self.fields[3])
-        self.lon = self.londm2dd(self.fields[4], self.fields[5])
+        self.lat = latdm2dd(self.fields[2], self.fields[3])
+        self.lon = londm2dd(self.fields[4], self.fields[5])
         self.quality = int(self.fields[6])
         self.number_of_satellites = int(self.fields[7])
         self.hdop = float(self.fields[8])
-        self.altitude_above_mean_sea_level = self.altitude2meters(self.fields[9], self.fields[10])
-        self.altitude_above_mean_geoid = self.altitude2meters(self.fields[11], self.fields[12])
+        self.altitude_above_mean_sea_level = altitude2meters(self.fields[9], self.fields[10])
+        self.altitude_above_mean_geoid = altitude2meters(self.fields[11], self.fields[12])
         try:
             self.seconds_since_dgps_update = float(self.fields[13])
         except ValueError:
@@ -324,5 +260,52 @@ where:
 """
 
         print(example)
+
+
+
+def latdm2dd(latdm, hemi):
+    degrees = float(latdm[:2])
+    minutes = float(latdm[3:])
+    dd = degrees + (minutes/60)
+
+    if (hemi == 'S'):
+        dd = -1 * dd
+
+    return dd
+
+
+def londm2dd(londm, hemi):
+    degrees = float(londm[:3])
+    minutes = float(londm[4:])
+    dd = degrees + (minutes/60)
+
+    if (hemi == 'W'):
+        dd = -1 * dd
+
+    return dd
+
+
+def altitude2meters(altitude, units):
+    if (units == 'M'):
+        try:
+            alt = float(altitude)
+        except ValueError:
+            alt = None
+    else:
+        alt = None
+
+        return alt
+
+
+def compute_nmea_checksum(string):
+
+    csum = 0
+    for elem in string.lstrip('$'):
+        csum ^= ord(elem)
+
+    computed_checksum = format(csum, 'X')
+
+    return computed_checksum
+
 
 # vim: set ts=4 sw=4 tw=0 et :
