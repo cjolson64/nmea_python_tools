@@ -34,6 +34,9 @@ class nmea0183:
         elif (self.message_type == 'ZDA'):
             self.__class__ = zda
             self.parse_fields()
+        elif (self.message_type == 'RMC'):
+            self.__class__ = rmc 
+            self.parse_fields()
 
 
     # Shamelessly taken from https://fishandwhistle.net/post/2016/using-pyserial-pynmea2-and-raspberry-pi-to-log-nmea-output/
@@ -164,7 +167,6 @@ class gga(nmea0183):
     def __init__(self, sentence):
 
         super().__init__(sentence)
-        self.parse_fields
 
     def parse_fields(self):
         self.time = float(self.fields[1])
@@ -228,7 +230,6 @@ class zda(nmea0183):
     def __init__(self, sentence):
 
         super().__init__(sentence)
-        self.parse_fields
 
     def parse_fields(self):
         self.time = float(self.fields[1])
@@ -257,6 +258,50 @@ where:
      01         2-digit local timezone hours: -13 to 13
      00         2-digit local timezone minutes: 0 to 59
      *60        Checksum, begins with *
+"""
+
+        print(example)
+
+class rmc(nmea0183):
+
+    def __init__(self, sentence):
+
+        super().__init__(sentence)
+
+    def parse_fields(self):
+        self.time = float(self.fields[1])
+        self.status = str(self.fields[2])
+        self.lat = latdm2dd(self.fields[3], self.fields[4])
+        self.lon = londm2dd(self.fields[5], self.fields[6])
+        self.speed_over_ground = float(self.fields[7])
+        self.track_made_good = float(self.fields[8])
+        self.date = str(self.fields[9])
+        self.magnetic_variation = self.fields[10] + ' ' + self.fields[11]
+
+
+    def print_help(self):
+
+        example = """
+$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A
+
+where:
+     RMC          Recommended Minimum Sentence C
+     123519       Time of fix, UTC 
+                    12 = 2-digit hour [24-hour clock]
+                    35 = 2-digit minute
+                    19 = 2-digit second
+     A            Data Status: A = valid
+                               V = invalid
+     4807.038,N   Latitude 48 degrees 07.038 minutes North
+     01131.000,E  Longitude 11 degrees 31.000 minutes East
+     022.4        Speed over ground [knots] 
+     084.4        Track made good [degrees, True]
+     230394       Date, UTC 
+                    23 = 2-digit day of month
+                    03 = 2-digit month
+                    94 = 2-digit year (1994)
+     003.1,W      Magnetic Variation [degrees], 3.1 degrees West
+     *6A          Checksum, always begins with *
 """
 
         print(example)
